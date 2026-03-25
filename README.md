@@ -3,7 +3,7 @@
 Student: Rayyan Ibrahim (B23110006137)  
 Phase: 1 — Requirements (Figure 5.1: “What is wanted”)  
 Deployed (Vercel): <PASTE_VERCEL_URL_HERE>  
-Repository: <PASTE_GITHUB_REPO_URL_HERE>
+Repository: https://github.com/Rayyan-Ibrahim/PolyLine-Editor
 
 ## What I did (my contribution)
 - Defined the problem, users, and scope for the PolyLine Editor.
