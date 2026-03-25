@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PolyLine Editor — CS 555 HCI</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0e0f11;
+    --surface:  #161820;
+    --panel:    #1c1e26;
+    --border:   #2a2d38;
+    --accent:   #4f8ef7;
+    --accent2:  #7c5ff5;
+    --green:    #3ecf8e;
+    --red:      #f46a6a;
+    --amber:    #f5a623;
+    --text:     #d8dce8;
+    --muted:    #5c6480;
+    --mono:     'DM Mono', monospace;
+    --display:  'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.03em;
+    color: #fff;
+  }
+  .logo span { color: var(--accent); }
+  .header-sep { flex: 1; }
+  .mode-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    transition: all .2s;
+  }
+  .mode-badge.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+  .mode-badge.move-active  { background: var(--amber); border-color: var(--amber); color: #000; }
+  .mode-badge.delete-active{ background: var(--red);   border-color: var(--red);   color: #fff; }
+
+  /* ---- TOOLBAR ---- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .toolbar-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-right: 4px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, transform .1s;
+    user-select: none;
+  }
+  .btn:hover  { background: var(--border); border-color: #3a3f52; }
+  .btn:active { transform: scale(.97); }
+  .btn.primary   { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #3a7de8; }
+  .btn.danger    { background: var(--red);   border-color: var(--red);   color: #fff; }
+  .btn.danger:hover  { background: #e05555; }
+  .btn.warning   { background: var(--amber); border-color: var(--amber); color: #000; }
+  .btn.warning:hover { background: #e09510; }
+  .btn.success   { background: var(--green); border-color: var(--green); color: #000; }
+  .btn.success:hover { background: #30be7e; }
+  .btn.active    { border-color: var(--accent); color: var(--accent); }
+  kbd {
+    display: inline-block;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 5px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .toolbar-divider { width: 1px; height: 26px; background: var(--border); margin: 0 6px; }
+
+  /* ---- MAIN AREA ---- */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ---- CANVAS ---- */
+  #canvas {
+    flex: 1;
+    display: block;
+    background: var(--bg);
+    cursor: crosshair;
+  }
+  #canvas.cursor-move   { cursor: move; }
+  #canvas.cursor-delete { cursor: not-allowed; }
+  #canvas.cursor-default{ cursor: default; }
+
+  /* ---- SIDEBAR ---- */
+  .sidebar {
+    width: 210px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .sidebar-section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section h3 {
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .stat-label { color: var(--muted); }
+  .stat-val { color: var(--text); font-weight: 500; }
+  .stat-val.accent  { color: var(--accent); }
+  .stat-val.green   { color: var(--green);  }
+  .stat-val.amber   { color: var(--amber);  }
+
+  .polyline-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px;
+  }
+  .polyline-list::-webkit-scrollbar { width: 4px; }
+  .polyline-list::-webkit-scrollbar-track { background: transparent; }
+  .polyline-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .poly-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: background .15s;
+    font-size: 11px;
+  }
+  .poly-item:hover { background: var(--border); }
+  .poly-item.selected { background: rgba(79,142,247,.15); border: 1px solid rgba(79,142,247,.3); }
+  .poly-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .poly-name { flex: 1; }
+  .poly-pts  { color: var(--muted); font-size: 10px; }
+  .poly-del  {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; padding: 2px 4px; border-radius: 3px;
+    font-size: 12px; line-height: 1;
+    transition: color .15s, background .15s;
+  }
+  .poly-del:hover { color: var(--red); background: rgba(244,106,106,.1); }
+
+  /* ---- STATUS BAR ---- */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 5px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .statusbar span b { color: var(--text); font-weight: 500; }
+  #status-msg { flex: 1; color: var(--accent); font-size: 11px; }
+
+  /* ---- HELP OVERLAY ---- */
+  .help-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .help-overlay.show { display: flex; }
+  .help-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 460px;
+    max-width: 90vw;
+  }
+  .help-box h2 {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 18px;
+    color: #fff;
+  }
+  .help-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .help-keys { display: flex; gap: 4px; min-width: 60px; }
+  .help-desc { color: var(--text); }
+  .help-close {
+    margin-top: 20px;
+    width: 100%;
+    padding: 10px;
+  }
+
+  /* ---- TOAST ---- */
+  #toast {
+    position: fixed;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--green);
+    color: #000;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity .3s, transform .3s;
+    pointer-events: none;
+    z-index: 50;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Poly<span>Line</span> Editor</div>
+  <div style="font-size:11px; color:var(--muted)">CS 555 · HCI Lab · HTML Canvas</div>
+  <div class="header-sep"></div>
+  <div id="mode-indicator" class="mode-badge active">Draw mode</div>
+  <button class="btn" onclick="showHelp()">? Help</button>
+</header>
+
+<div class="toolbar">
+  <span class="toolbar-label">Mode</span>
+  <button class="btn primary" id="btn-begin"  onclick="setMode('draw')"   title="Begin drawing (B)"><kbd>B</kbd> Begin</button>
+  <button class="btn warning"  id="btn-move"   onclick="setMode('move')"   title="Move a point (M)"><kbd>M</kbd> Move</button>
+  <button class="btn danger"   id="btn-delete" onclick="setMode('delete')" title="Delete a point (D)"><kbd>D</kbd> Delete</button>
+  <div class="toolbar-divider"></div>
+  <span class="toolbar-label">Actions</span>
+  <button class="btn" onclick="finishPolyline()" title="Finish current polyline (F)"><kbd>F</kbd> Finish</button>
+  <button class="btn" onclick="undoAction()" title="Undo last action (U)"><kbd>U</kbd> Undo</button>
+  <button class="btn success" onclick="saveToFile()" title="Save to JSON file (S)"><kbd>S</kbd> Save</button>
+  <button class="btn" onclick="loadFromFile()" title="Load JSON file (L)"><kbd>L</kbd> Load</button>
+  <button class="btn danger"  onclick="clearAll()"  title="Clear everything"><kbd>X</kbd> Clear all</button>
+  <button class="btn danger" onclick="exitApp()" title="Exit program"><kbd>Q</kbd> Exit</button>
+  <div class="toolbar-divider"></div>
+  <span class="toolbar-label">Insert</span>
+  <button class="btn" onclick="setMode('insert')" title="Insert point on segment (I)"><kbd>I</kbd> Insert pt</button>
+  <div class="header-sep"></div>
+  <label style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+    <input type="checkbox" id="snap-grid" onchange="toggleSnap(this.checked)" style="accent-color:var(--accent)">
+    Grid snap (10px)
+  </label>
+</div>
+
+<div class="main">
+  <canvas id="canvas"></canvas>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h3>Stats</h3>
+      <div class="stat-row"><span class="stat-label">Polylines</span><span class="stat-val accent" id="st-count">0</span></div>
+      <div class="stat-row"><span class="stat-label">Total points</span><span class="stat-val" id="st-pts">0</span></div>
+      <div class="stat-row"><span class="stat-label">Active</span><span class="stat-val green" id="st-active">—</span></div>
+      <div class="stat-row"><span class="stat-label">Mode</span><span class="stat-val amber" id="st-mode">draw</span></div>
+    </div>
+    <div class="sidebar-section" style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
+      <h3>Polylines</h3>
+      <div class="polyline-list" id="polyline-list"></div>
+    </div>
+    <div class="sidebar-section">
+      <h3>Tip</h3>
+      <div style="font-size:11px; color:var(--muted); line-height:1.6;">
+        Click canvas to add points.<br>
+        Press <kbd>F</kbd> or double-click to finish.<br>
+        Press <kbd>Q</kbd> to quit (clear).
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="status-msg">Press B to begin a new polyline, then click to add points.</span>
+  <span>Mouse: <b id="st-xy">0, 0</b></span>
+  <span>Nearest: <b id="st-nearest">—</b></span>
+</div>
+
+<div class="help-overlay" id="help-overlay">
+  <div class="help-box">
+    <h2>Keyboard shortcuts</h2>
+    <div class="help-row"><div class="help-keys"><kbd>B</kbd></div><div class="help-desc">Begin new polyline</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>D</kbd></div><div class="help-desc">Delete mode — click a point to remove it</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>M</kbd></div><div class="help-desc">Move mode — drag a point to reposition</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>I</kbd></div><div class="help-desc">Insert mode — click on a segment to add a point</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>F</kbd></div><div class="help-desc">Finish / close current polyline</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>R</kbd></div><div class="help-desc">Refresh — erase and redraw all</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>S</kbd></div><div class="help-desc">Save polylines to JSON file</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>L</kbd></div><div class="help-desc">Load polylines from JSON file</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>X</kbd></div><div class="help-desc">Clear all polylines</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>Q</kbd></div><div class="help-desc">Quit / clear (same as X)</div></div>
+    <div class="help-row"><div class="help-keys"><kbd>Esc</kbd></div><div class="help-desc">Cancel / switch to draw mode</div></div>
+    <button class="btn primary help-close" onclick="hideHelp()">Close</button>
+  </div>
+</div>
+
+<div id="toast">Saved!</div>
+<input type="file" id="file-input" accept=".json" style="display:none" onchange="handleFileLoad(this)">
+
+<script>
+// ============================================================
+// DATA STRUCTURES
+// ============================================================
+// Each polyline: { id, name, color, points: [{x,y},...], finished }
+// polys array: up to 100 polylines
+const MAX_POLYS = 100;
+let polys = [];       // array of polyline objects
+let activeIdx = -1;   // index of polyline being drawn
+let mode = 'draw';    // 'draw' | 'move' | 'delete' | 'insert'
+let snapEnabled = false;
+let nextId = 1;
+
+// ============================================================
+// UNDO SYSTEM
+// ============================================================
+let history = [];
+
+function saveState() {
+  history.push(JSON.stringify(polys));
+  if (history.length > 50) history.shift();
+}
+
+function undoAction() {
+  if (history.length === 0) {
+    setStatus('Nothing to undo.');
+    return;
+  }
+  polys = JSON.parse(history.pop());
+  activeIdx = -1;
+  updateList();
+  draw();
+  setStatus('Undo successful.');
+}
+
+// move state
+let movingPoly = -1, movingPt = -1;
+let mouseX = 0, mouseY = 0;
+
+// color palette — cycles for new polylines
+const COLORS = [
+  '#4f8ef7','#7c5ff5','#3ecf8e','#f5a623',
+  '#f46a6a','#5ee8d0','#f5d76e','#f47aff',
+  '#85c1ff','#ff9f6b','#a8ff78','#ff6bab',
+];
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+// ============================================================
+// CANVAS RESIZE
+// ============================================================
+function resizeCanvas() {
+  canvas.width  = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  draw();
+}
+new ResizeObserver(resizeCanvas).observe(canvas);
+resizeCanvas();
+
+// ============================================================
+// SNAPPING
+// ============================================================
+function snap(v) { return snapEnabled ? Math.round(v / 10) * 10 : v; }
+function snapPt(x, y) { return { x: snap(x), y: snap(y) }; }
+function toggleSnap(v) { snapEnabled = v; }
+
+// ============================================================
+// UTILITY
+// ============================================================
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+// Find the closest point across all polylines; returns {polyIdx, ptIdx, d}
+function findNearest(mx, my) {
+  let best = { polyIdx: -1, ptIdx: -1, d: Infinity };
+  for (let i = 0; i < polys.length; i++) {
+    for (let j = 0; j < polys[i].points.length; j++) {
+      const d = dist({ x: mx, y: my }, polys[i].points[j]);
+      if (d < best.d) { best = { polyIdx: i, ptIdx: j, d }; }
+    }
+  }
+  return best;
+}
+
+// Find the closest segment midpoint for insert mode
+function findNearestSegment(mx, my) {
+  let best = { polyIdx: -1, afterIdx: -1, d: Infinity };
+  for (let i = 0; i < polys.length; i++) {
+    const pts = polys[i].points;
+    for (let j = 0; j < pts.length - 1; j++) {
+      // Project mouse onto segment
+      const ax = pts[j].x, ay = pts[j].y;
+      const bx = pts[j+1].x, by = pts[j+1].y;
+      const dx = bx - ax, dy = by - ay;
+      const lenSq = dx*dx + dy*dy;
+      if (lenSq === 0) continue;
+      const t = Math.max(0, Math.min(1, ((mx-ax)*dx + (my-ay)*dy) / lenSq));
+      const px = ax + t*dx, py = ay + t*dy;
+      const d = Math.hypot(mx - px, my - py);
+      if (d < best.d) { best = { polyIdx: i, afterIdx: j, d, px, py }; }
+    }
+  }
+  return best;
+}
+
+// ============================================================
+// DRAWING
+// ============================================================
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background grid (subtle)
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Draw each polyline
+  for (let i = 0; i < polys.length; i++) {
+    const p = polys[i];
+    if (p.points.length === 0) continue;
+    const isActive = (i === activeIdx);
+    const color = p.color;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.setLineDash(isActive && !p.finished ? [6, 4] : []);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(p.points[0].x, p.points[0].y);
+    for (let j = 1; j < p.points.length; j++) {
+      ctx.lineTo(p.points[j].x, p.points[j].y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Preview line to mouse if drawing this polyline
+    if (isActive && !p.finished && p.points.length > 0) {
+      const last = p.points[p.points.length - 1];
+      ctx.strokeStyle = color + '77';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(mouseX, mouseY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Draw vertices
+    for (let j = 0; j < p.points.length; j++) {
+      const pt = p.points[j];
+      const isFirst = j === 0;
+      const isLast  = j === p.points.length - 1;
+
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#0e0f11';
+      ctx.lineWidth = 1.5;
+
+      if (isFirst && !p.finished) {
+        // Start point — square
+        ctx.fillRect(pt.x - 5, pt.y - 5, 10, 10);
+      } else if (isLast && !p.finished) {
+        // Last point — larger circle
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 6, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Hover highlight in move/delete/insert modes
+  if (mode === 'move' || mode === 'delete') {
+    const n = findNearest(mouseX, mouseY);
+    if (n.d < 20 && n.polyIdx >= 0) {
+      const pt = polys[n.polyIdx].points[n.ptIdx];
+      ctx.strokeStyle = mode === 'delete' ? '#f46a6a' : '#f5a623';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 9, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+  if (mode === 'insert') {
+    const seg = findNearestSegment(mouseX, mouseY);
+    if (seg.d < 15 && seg.polyIdx >= 0) {
+      ctx.fillStyle = '#3ecf8e';
+      ctx.strokeStyle = '#0e0f11';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(seg.px, seg.py, 6, 0, Math.PI*2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  updateStats();
+}
+
+// ============================================================
+// MODES
+// ============================================================
+function setMode(m) {
+  mode = m;
+  const ind = document.getElementById('mode-indicator');
+  const labels = { draw: 'Draw mode', move: 'Move mode', delete: 'Delete mode', insert: 'Insert mode' };
+  ind.textContent = labels[m];
+  ind.className = 'mode-badge active';
+  if (m === 'move')   ind.classList.add('move-active');
+  if (m === 'delete') ind.classList.add('delete-active');
+
+  const cursors = { draw: 'crosshair', move: 'move', delete: 'not-allowed', insert: 'cell' };
+  canvas.style.cursor = cursors[m] || 'crosshair';
+
+  document.getElementById('st-mode').textContent = m;
+
+  const msgs = {
+    draw:   'Click on canvas to add points to the active polyline. Press F or double-click to finish.',
+    move:   'Click and drag a vertex to move it. Points within 20px can be grabbed.',
+    delete: 'Click near a vertex to delete it. Adjacent vertices will be reconnected.',
+    insert: 'Click on a line segment to insert a new point at that position.',
+  };
+  setStatus(msgs[m]);
+  draw();
+}
+
+// ============================================================
+// BEGIN — create new polyline
+// ============================================================
+function beginPolyline() {
+  if (polys.length >= MAX_POLYS) {
+    showToast('Max 100 polylines reached!', '#f46a6a');
+    return;
+  }
+  const newPoly = {
+    id: nextId++,
+    name: 'Line ' + (polys.length + 1),
+    color: COLORS[(polys.length) % COLORS.length],
+    points: [],
+    finished: false,
+  };
+  polys.push(newPoly);
+  activeIdx = polys.length - 1;
+  setMode('draw');
+  setStatus('New polyline started. Click to add points. Press F or double-click to finish.');
+  updateList();
+}
+
+function finishPolyline() {
+  if (activeIdx < 0 || activeIdx >= polys.length) return;
+  if (polys[activeIdx].points.length < 2) {
+    setStatus('Need at least 2 points to finish a polyline.');
+    return;
+  }
+  polys[activeIdx].finished = true;
+  setStatus('Polyline "' + polys[activeIdx].name + '" finished. Press B to start a new one.');
+  activeIdx = -1;
+  updateList();
+  draw();
+}
+
+// ============================================================
+// MOUSE EVENTS
+// ============================================================
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = snap(e.clientX - rect.left);
+  mouseY = snap(e.clientY - rect.top);
+  document.getElementById('st-xy').textContent = mouseX + ', ' + mouseY;
+
+  // Drag in move mode
+  if (movingPoly >= 0 && movingPt >= 0) {
+    polys[movingPoly].points[movingPt] = { x: mouseX, y: mouseY };
+  }
+
+  // Show nearest
+  const n = findNearest(mouseX, mouseY);
+  const el = document.getElementById('st-nearest');
+  if (n.d < 20 && n.polyIdx >= 0) {
+    const pt = polys[n.polyIdx].points[n.ptIdx];
+    el.textContent = polys[n.polyIdx].name + '[' + n.ptIdx + '] @ ' + Math.round(pt.x) + ',' + Math.round(pt.y);
+  } else {
+    el.textContent = '—';
+  }
+  draw();
+});
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = snap(e.clientX - rect.left);
+  const my = snap(e.clientY - rect.top);
+
+  if (mode === 'draw') {
+    if (activeIdx < 0 || polys[activeIdx].finished) {
+      beginPolyline();
+    }
+    saveState(); // ADD THIS
+    polys[activeIdx].points.push({ x: mx, y: my });
+    updateList();
+    draw();
+
+  } else if (mode === 'move') {
+    const n = findNearest(mx, my);
+    if (n.d < 20 && n.polyIdx >= 0) {
+      saveState(); // ADD THIS
+      movingPoly = n.polyIdx;
+      movingPt   = n.ptIdx;
+    }
+
+  } else if (mode === 'delete') {
+    const n = findNearest(mx, my);
+    if (n.d < 20 && n.polyIdx >= 0) {
+      saveState(); // ADD THIS
+      deletePoint(n.polyIdx, n.ptIdx);
+    }
+
+  } else if (mode === 'insert') {
+    const seg = findNearestSegment(mx, my);
+    if (seg.d < 15 && seg.polyIdx >= 0) {
+      saveState(); // ADD THIs
+      // Insert point after seg.afterIdx
+      polys[seg.polyIdx].points.splice(seg.afterIdx + 1, 0, { x: Math.round(seg.px), y: Math.round(seg.py) });
+      setStatus('Point inserted into ' + polys[seg.polyIdx].name);
+      updateList();
+      draw();
+    }
+  }
+});
+
+canvas.addEventListener('mouseup', () => {
+  if (movingPoly >= 0) {
+    setStatus('Moved point in ' + polys[movingPoly].name);
+    movingPoly = -1;
+    movingPt   = -1;
+    draw();
+  }
+});
+
+canvas.addEventListener('dblclick', () => {
+  if (mode === 'draw') finishPolyline();
+});
+
+// ============================================================
+// DELETE POINT
+// ============================================================
+function deletePoint(pi, ptIdx) {
+  saveState(); // ADD THIS
+  const poly = polys[pi];
+  if (poly.points.length <= 1) {
+    // Remove entire polyline if only 1 point
+    if (pi === activeIdx) activeIdx = -1;
+    else if (activeIdx > pi) activeIdx--;
+    polys.splice(pi, 1);
+    setStatus('Polyline removed (last point deleted).');
+  } else {
+    poly.points.splice(ptIdx, 1);
+    setStatus('Point ' + ptIdx + ' deleted from ' + poly.name);
+  }
+  updateList();
+  draw();
+}
+
+// ============================================================
+// UNDO (BACKSTEP)
+// ============================================================
+function undoAction() {
+  // If currently drawing a polyline → remove last point
+  if (activeIdx >= 0 && polys[activeIdx].points.length > 0) {
+    polys[activeIdx].points.pop();
+
+    if (polys[activeIdx].points.length === 0) {
+      setStatus('Last point removed.');
+    } else {
+      setStatus('Undo: last point removed.');
+    }
+
+    updateList();
+    draw();
+    return;
+  }
+
+  // Otherwise remove last polyline
+  if (polys.length > 0) {
+    const removed = polys.pop();
+    activeIdx = -1;
+    setStatus('Undo: removed "' + removed.name + '"');
+    updateList();
+    draw();
+    return;
+  }
+
+  setStatus('Nothing to undo.');
+}
+
+// ============================================================
+// CLEAR ALL
+// ============================================================
+function clearAll() {
+  if (!confirm('Clear all polylines?')) return;
+  saveState(); // ADD THIS
+  polys = [];
+  activeIdx = -1;
+  nextId = 1;
+  updateList();
+  draw();
+  setStatus('All cleared. Press B to begin.');
+}
+
+// ============================================================
+// SAVE TO JSON FILE
+// ============================================================
+function saveToFile() {
+  const data = { version: 1, polys: polys.map(p => ({
+    id: p.id, name: p.name, color: p.color,
+    points: p.points, finished: p.finished
+  }))};
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'polylines.json';
+  a.click();
+  showToast('Saved to polylines.json');
+}
+
+// ============================================================
+// LOAD FROM FILE
+// ============================================================
+function loadFromFile() {
+  document.getElementById('file-input').click();
+}
+function handleFileLoad(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+       saveState(); // ADD THIS
+      const data = JSON.parse(e.target.result);
+      if (data.polys) {
+        polys = data.polys;
+        activeIdx = -1;
+        nextId = Math.max(...polys.map(p => p.id), 0) + 1;
+        updateList();
+        draw();
+        showToast('Loaded ' + polys.length + ' polyline(s)');
+      }
+    } catch (err) {
+      alert('Invalid JSON file: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const key = e.key.toLowerCase();
+  if (key === 'b') beginPolyline();
+  if (key === 'd') setMode('delete');
+  if (key === 'm') setMode('move');
+  if (key === 'i') setMode('insert');
+  if (key === 'f') finishPolyline();
+  if (key === 'u') undoAction();
+  if (key === 's') saveToFile();
+  if (key === 'l') loadFromFile();
+  if (key === 'x') clearAll();
+  if (key === 'q') exitApp();
+  if (key === 'escape') setMode('draw');
+});
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function updateStats() {
+  document.getElementById('st-count').textContent = polys.length;
+  document.getElementById('st-pts').textContent   = polys.reduce((s, p) => s + p.points.length, 0);
+  const act = activeIdx >= 0 ? polys[activeIdx].name : '—';
+  document.getElementById('st-active').textContent = act;
+}
+
+function updateList() {
+  const list = document.getElementById('polyline-list');
+  list.innerHTML = '';
+  polys.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'poly-item' + (i === activeIdx ? ' selected' : '');
+    item.innerHTML = `
+      <div class="poly-dot" style="background:${p.color}"></div>
+      <div class="poly-name">${p.name}</div>
+      <div class="poly-pts">${p.points.length}pt</div>
+      <button class="poly-del" onclick="deletePolyline(${i})" title="Delete">✕</button>
+    `;
+    item.addEventListener('click', ev => {
+      if (ev.target.classList.contains('poly-del')) return;
+      activeIdx = i;
+      if (!p.finished) setMode('draw');
+      updateList(); draw();
+    });
+    list.appendChild(item);
+  });
+  updateStats();
+}
+
+function deletePolyline(i) {
+  if (!confirm('Delete "' + polys[i].name + '"?')) return;
+  if (i === activeIdx) activeIdx = -1;
+  else if (activeIdx > i) activeIdx--;
+  polys.splice(i, 1);
+  updateList(); draw();
+}
+
+function setStatus(msg) { document.getElementById('status-msg').textContent = msg; }
+function showHelp() { document.getElementById('help-overlay').classList.add('show'); }
+function hideHelp() { document.getElementById('help-overlay').classList.remove('show'); }
+
+function showToast(msg, bg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  if (bg) t.style.background = bg;
+  else t.style.background = 'var(--green)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+
+function exitApp() {
+  if (!confirm('Are you sure you want to exit the program?')) return;
+
+  // Clear everything
+  polys = [];
+  activeIdx = -1;
+  nextId = 1;
+  updateList();
+  draw();
+
+  // Show exit message
+  setStatus('Program exited. Refresh page to start again.');
+
+  // Disable further interaction
+  canvas.style.pointerEvents = 'none';
+
+  showToast('Exited!', '#f46a6a');
+}
+// Init
+setMode('draw');
+setStatus('Press B to begin a new polyline, then click to add points.');
+</script>
+</body>
+</html>
